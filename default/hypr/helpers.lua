@@ -180,6 +180,64 @@ function o.launch_terminal()
   return launch
 end
 
+-- The Lua expression each function bind stands for when no command does, so the
+-- keybindings menu can dispatch it through hyprctl.
+o.bind_expressions = {}
+
+-- The logical width a scrolling column's fraction is measured against: the
+-- monitor less what bars and panels reserve along its sides.
+local function usable_monitor_width(monitor)
+  if not (monitor and monitor.size and monitor.scale and monitor.scale > 0) then
+    return nil
+  end
+
+  local width = monitor.size.width
+  if monitor.transform and monitor.transform % 2 == 1 then
+    width = monitor.size.height
+  end
+
+  width = width / monitor.scale
+  if monitor.reserved then
+    width = width - (monitor.reserved.left or 0) - (monitor.reserved.right or 0)
+  end
+
+  return width > 0 and width or nil
+end
+
+-- Whether the workspace lays its windows out on a horizontal scrolling tape,
+-- the only shape where a column's width is what a horizontal resize means.
+local function scrolls_horizontally(workspace)
+  if not (workspace and workspace.tiled_layout == "scrolling") then
+    return false
+  end
+
+  local opts = workspace.layout_opts
+  local direction = type(opts) == "table" and opts.direction or hl.get_config("scrolling.direction")
+
+  return direction ~= "up" and direction ~= "down"
+end
+
+-- Grow or shrink the focused window's width by px. The scrolling layout clamps a
+-- generic resize to the viewport, so the last column of the tape can't grow;
+-- colresize grows any column and scrolls the tape to fit it. Every other layout,
+-- a vertical tape, and floating windows keep the generic resize.
+function o.resize_width(px)
+  local function resize()
+    local window = hl.get_active_window()
+    local workspace = hl.get_active_special_workspace() or hl.get_active_workspace()
+    local usable = usable_monitor_width(hl.get_active_monitor())
+
+    if scrolls_horizontally(workspace) and window and not window.floating and usable then
+      hl.dispatch(hl.dsp.layout(string.format("colresize %+.4f", px / usable)))
+    else
+      hl.dispatch(hl.dsp.window.resize({ x = px, y = 0, relative = true }))
+    end
+  end
+
+  o.bind_expressions[resize] = "o.resize_width(" .. tostring(px) .. ")"
+  return resize
+end
+
 function o.exec_on_start(command)
   hl.on("hyprland.start", function()
     hl.exec_cmd(command)

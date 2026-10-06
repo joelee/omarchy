@@ -232,3 +232,15 @@ keybindings >/dev/null
 grep -qP '→ Terminal\texec\tomarchy-launch-terminal$' "$tmpdir"/cache/omarchy/keybindings-*.records ||
   fail "picking the terminal bind from the menu launches a terminal" "$(cat "$tmpdir"/cache/omarchy/keybindings-*.records)"
 pass "picking the terminal bind from the menu launches a terminal"
+
+# The width binds are Lua functions too, with no command behind them, so the
+# menu dispatches the Lua expression each one stands for.
+stub_hyprctl <<BINDS
+$(lua_bind 64 "SUPER + code:21" "Shrink window left")
+BINDS
+
+rm -rf "$tmpdir/cache"
+keybindings >/dev/null
+grep -qP '→ Shrink window left\tlua\to\.resize_width\(100\)$' "$tmpdir"/cache/omarchy/keybindings-*.records ||
+  fail "picking a width bind from the menu resizes the window" "$(cat "$tmpdir"/cache/omarchy/keybindings-*.records)"
+pass "picking a width bind from the menu resizes the window"
